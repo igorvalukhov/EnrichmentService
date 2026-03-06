@@ -61,6 +61,7 @@ builder.Services
     });
 
 builder.Services.AddSingleton<IJsonPathAccessor, JsonPathAccessor>();
+builder.Services.AddSingleton<IMessageMerger, MessageMerger>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 
 var host = builder.Build();

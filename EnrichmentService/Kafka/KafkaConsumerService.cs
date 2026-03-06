@@ -1,6 +1,8 @@
 ﻿using Confluent.Kafka;
 using EnrichmentService.Configuration;
+using EnrichmentService.Models;
 using Microsoft.Extensions.Options;
+using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Kafka;
 
@@ -63,7 +65,8 @@ public sealed class KafkaConsumerService : BackgroundService
 
             try
             {
-                consumeResult = consumer.Consume(TimeSpan.FromMilliseconds(_kafkaOptions.PollTimeoutMs));
+                consumeResult = consumer.Consume(
+                    TimeSpan.FromMilliseconds(_kafkaOptions.PollTimeoutMs));
             }
             catch (ConsumeException ex)
             {
@@ -76,13 +79,25 @@ public sealed class KafkaConsumerService : BackgroundService
             if (consumeResult is null) continue;
 
             _logger.LogInformation(
-                "Message received. Topic: {Topic}, Partition: {Partition}, " +
-                "Offset: {Offset}, Key: {Key}, Body: {Body}",
+                "Raw message received. Topic: {Topic}, Partition: {Partition}, " +
+                "Offset: {Offset}, Key: {Key}",
                 consumeResult.Topic,
                 consumeResult.Partition.Value,
                 consumeResult.Offset.Value,
-                consumeResult.Message.Key,
-                consumeResult.Message.Value);
+                consumeResult.Message.Key);
+
+            var parseResult = TryParseJson(consumeResult.Message.Value, consumeResult.Offset.Value);
+
+            if (!parseResult.IsSuccess)
+            {
+                consumer.Commit(consumeResult);
+                continue;
+            }
+
+            _logger.LogInformation(
+                "Message parsed successfully. Offset: {Offset}, Body: {Body}",
+                consumeResult.Offset.Value,
+                parseResult.Payload.ToJsonString());
 
             consumer.Commit(consumeResult);
 
@@ -92,6 +107,39 @@ public sealed class KafkaConsumerService : BackgroundService
                 consumeResult.Offset.Value);
 
             await Task.Delay(10, stoppingToken);
+        }
+    }
+
+    private EnrichmentResult TryParseJson(string rawValue, long offset)
+    {
+        try
+        {
+            var node = JsonNode.Parse(rawValue);
+
+            if (node is null)
+            {
+                _logger.LogWarning(
+                    "Parsed JSON is null. Offset: {Offset}. Skipping.",
+                    offset);
+                return EnrichmentResult.Failure("Parsed JSON is null.", JsonValue.Create("")!);
+            }
+
+            if (node is not JsonObject)
+            {
+                _logger.LogWarning(
+                    "Message is not a JSON object. Offset: {Offset}. Skipping.",
+                    offset);
+                return EnrichmentResult.Failure("Root must be a JSON object.", node);
+            }
+
+            return EnrichmentResult.Success(node);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to parse message as JSON. Offset: {Offset}. Skipping.",
+                offset);
+            return EnrichmentResult.Failure(ex.Message, JsonValue.Create(rawValue)!);
         }
     }
 }
