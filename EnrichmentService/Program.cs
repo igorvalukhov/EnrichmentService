@@ -1,5 +1,7 @@
+using EnrichmentService.Abstractions;
 using EnrichmentService.Configuration;
 using EnrichmentService.Kafka;
+using EnrichmentService.Services;
 using Serilog;
 using Serilog.Events;
 
@@ -22,7 +24,11 @@ builder.Services
     .Bind(builder.Configuration.GetSection(KafkaOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+builder.Services
+    .AddOptions<EnrichmentSchemaOptions>()
+    .Bind(builder.Configuration.GetSection(EnrichmentSchemaOptions.SectionName));
 
+builder.Services.AddSingleton<IJsonPathAccessor, JsonPathAccessor>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 
 var host = builder.Build();
