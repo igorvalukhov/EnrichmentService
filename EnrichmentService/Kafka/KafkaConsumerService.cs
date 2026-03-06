@@ -121,7 +121,7 @@ public sealed class KafkaConsumerService : BackgroundService
                 _logger.LogWarning(
                     "Parsed JSON is null. Offset: {Offset}. Skipping.",
                     offset);
-                return EnrichmentResult.Failure("Parsed JSON is null.", JsonValue.Create("")!);
+                return EnrichmentResult.Failure(JsonValue.Create("")!, "Parsed JSON is null.");
             }
 
             if (node is not JsonObject)
@@ -129,17 +129,17 @@ public sealed class KafkaConsumerService : BackgroundService
                 _logger.LogWarning(
                     "Message is not a JSON object. Offset: {Offset}. Skipping.",
                     offset);
-                return EnrichmentResult.Failure("Root must be a JSON object.", node);
+                return EnrichmentResult.Failure(node, "Root must be a JSON object.");
             }
 
-            return EnrichmentResult.Success(node);
+            return EnrichmentResult.Enriched(node);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "Failed to parse message as JSON. Offset: {Offset}. Skipping.",
                 offset);
-            return EnrichmentResult.Failure(ex.Message, JsonValue.Create(rawValue)!);
+            return EnrichmentResult.Failure(JsonValue.Create(rawValue)!, ex.Message);
         }
     }
 }

@@ -2,6 +2,8 @@
 using EnrichmentService.Configuration;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Services;
@@ -11,6 +13,8 @@ public sealed class ExternalApiClient : IExternalApiClient
     private readonly HttpClient _http;
     private readonly ExternalApiOptions _options;
     private readonly ILogger<ExternalApiClient> _logger;
+
+    private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = false };
 
     public ExternalApiClient(
         HttpClient http,
@@ -68,8 +72,34 @@ public sealed class ExternalApiClient : IExternalApiClient
     }
 
     /// <inheritdoc />
-    public Task SendMessageAsync(JsonNode message, CancellationToken ct = default)
+    public async Task SendMessageAsync(JsonNode message, CancellationToken ct = default)
     {
-        throw new NotImplementedException();
+        var sw = Stopwatch.StartNew();
+
+        _logger.LogInformation(
+            "Sending message to external API. Endpoint: {Endpoint}",
+            _options.SendEndpoint);
+
+        try
+        {
+            var response = await _http.PostAsJsonAsync(
+                _options.SendEndpoint, message, JsonOpts, ct);
+
+            sw.Stop();
+
+            _logger.LogInformation(
+                "Send completed. StatusCode: {StatusCode}, Duration: {Duration}ms",
+                (int)response.StatusCode, sw.ElapsedMilliseconds);
+
+            response.EnsureSuccessStatusCode();
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex,
+                "Failed to send message to external API. Duration: {Duration}ms",
+                sw.ElapsedMilliseconds);
+            throw;
+        }
     }
 }
