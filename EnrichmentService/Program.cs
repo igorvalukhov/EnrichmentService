@@ -1,7 +1,42 @@
-using EnrichmentService;
+using EnrichmentService.Configuration;
+using EnrichmentService.Kafka;
+using Serilog;
+using Serilog.Events;
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddHostedService<Worker>();
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Confluent.Kafka", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(outputTemplate:
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File("logs/enrichment-.log", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+
+builder.Services.AddSerilog();
+
+builder.Services
+    .AddOptions<KafkaOptions>()
+    .Bind(builder.Configuration.GetSection(KafkaOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddHostedService<KafkaConsumerService>();
 
 var host = builder.Build();
-host.Run();
+
+try
+{
+    Log.Information("Starting Enrichment Service");
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application Terminated Unexpectedly");
+}
+finally
+{
+    await Log.CloseAndFlushAsync();
+}
