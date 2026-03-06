@@ -1,9 +1,97 @@
-﻿namespace EnrichmentService.Kafka;
+﻿using Confluent.Kafka;
+using EnrichmentService.Configuration;
+using Microsoft.Extensions.Options;
+
+namespace EnrichmentService.Kafka;
 
 public sealed class KafkaConsumerService : BackgroundService
 {
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    private readonly KafkaOptions _kafkaOptions;
+    private readonly ILogger<KafkaConsumerService> _logger;
+
+    public KafkaConsumerService(
+        IOptions<KafkaOptions> kafkaOptions,
+        ILogger<KafkaConsumerService> logger)
     {
-        throw new NotImplementedException();
+        _kafkaOptions = kafkaOptions.Value;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation(
+            "Kafka consumer starting. Topic: {Topic}, Group: {Group}, Brokers: {Brokers}",
+            _kafkaOptions.InputTopic,
+            _kafkaOptions.ConsumerGroup,
+            _kafkaOptions.BootstrapServers);
+
+        var config = new ConsumerConfig
+        {
+            BootstrapServers = _kafkaOptions.BootstrapServers,
+            GroupId = _kafkaOptions.ConsumerGroup,
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false,
+        };
+
+        using var consumer = new ConsumerBuilder<string, string>(config)
+            .SetErrorHandler((_, e) =>
+                _logger.LogError(
+                    "Kafka error. Code: {Code}, Reason: {Reason}",
+                    e.Code, e.Reason))
+            .Build();
+
+        consumer.Subscribe(_kafkaOptions.InputTopic);
+
+        try
+        {
+            await ConsumeLoopAsync(consumer, stoppingToken);
+        }
+        finally
+        {
+            consumer.Close();
+            _logger.LogInformation("Kafka consumer stopped.");
+        }
+    }
+
+    private async Task ConsumeLoopAsync(
+        IConsumer<string, string> consumer,
+        CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            ConsumeResult<string, string>? consumeResult = null;
+
+            try
+            {
+                consumeResult = consumer.Consume(TimeSpan.FromMilliseconds(_kafkaOptions.PollTimeoutMs));
+            }
+            catch (ConsumeException ex)
+            {
+                _logger.LogError(ex,
+                    "Kafka consume error. Offset: {Offset}",
+                    ex.ConsumerRecord?.Offset);
+                continue;
+            }
+
+            if (consumeResult is null) continue;
+
+            _logger.LogInformation(
+                "Message received. Topic: {Topic}, Partition: {Partition}, " +
+                "Offset: {Offset}, Key: {Key}, Body: {Body}",
+                consumeResult.Topic,
+                consumeResult.Partition.Value,
+                consumeResult.Offset.Value,
+                consumeResult.Message.Key,
+                consumeResult.Message.Value);
+
+            consumer.Commit(consumeResult);
+
+            _logger.LogDebug(
+                "Offset committed. Partition: {Partition}, Offset: {Offset}",
+                consumeResult.Partition.Value,
+                consumeResult.Offset.Value);
+
+            await Task.Delay(10, stoppingToken);
+        }
     }
 }
