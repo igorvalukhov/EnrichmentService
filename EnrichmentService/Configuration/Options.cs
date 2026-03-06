@@ -22,3 +22,14 @@ public sealed class EnrichmentRuleOptions
     public required string SourcePath { get; init; }
     public required string DestinationPath { get; init; }
 }
+
+public sealed class ExternalApiOptions
+{
+    public const string SectionName = "ExternalApi";
+
+    public required string BaseUrl { get; init; }
+    public string FetchEndpointTemplate { get; init; } = "/api/enrich/{value}";
+    public string SendEndpoint { get; init; } = "/api/messages/enriched";
+    public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(10);
+    public int RetryCount { get; init; } = 3;
+}
