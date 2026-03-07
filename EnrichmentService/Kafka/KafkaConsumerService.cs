@@ -3,6 +3,7 @@ using EnrichmentService.Abstractions;
 using EnrichmentService.Configuration;
 using EnrichmentService.Models;
 using Microsoft.Extensions.Options;
+using Prometheus;
 using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Kafka;
@@ -15,6 +16,25 @@ public sealed class KafkaConsumerService : BackgroundService
     private readonly IEnrichmentOrchestrator _orchestrator;
     private readonly KafkaOptions _kafkaOptions;
     private readonly ILogger<KafkaConsumerService> _logger;
+
+    private static readonly Counter MessagesConsumed = Metrics
+        .CreateCounter("enrichment_messages_consumed_total", "Total messages consumed from Kafka");
+
+    private static readonly Counter MessagesEnriched = Metrics
+        .CreateCounter("enrichment_messages_enriched_total", "Messages successfully enriched");
+
+    private static readonly Counter MessagesFallback = Metrics
+        .CreateCounter("enrichment_messages_fallback_total", "Messages sent without enrichment");
+
+    private static readonly Counter MessagesFailed = Metrics
+        .CreateCounter("enrichment_messages_failed_total", "Messages that failed to process entirely");
+
+    private static readonly Histogram ProcessingDuration = Metrics
+        .CreateHistogram("enrichment_processing_duration_seconds", "Message processing duration",
+            new HistogramConfiguration
+            {
+                Buckets = Histogram.LinearBuckets(0.05, 0.05, 20)
+            });
 
     public KafkaConsumerService(
         IEnrichmentOrchestrator orchestrator,
@@ -86,6 +106,8 @@ public sealed class KafkaConsumerService : BackgroundService
 
             if (consumeResult is null) continue;
 
+            MessagesConsumed.Inc();
+
             _logger.LogInformation(
                 "Raw message received. Topic: {Topic}, Partition: {Partition}, " +
                 "Offset: {Offset}, Key: {Key}, Body: {Body}",
@@ -99,14 +121,17 @@ public sealed class KafkaConsumerService : BackgroundService
 
             if (!parseResult.IsSuccess)
             {
+                MessagesFailed.Inc();
                 consumer.Commit(consumeResult);
                 continue;
             }
 
+            using var timer = ProcessingDuration.NewTimer();
             var result = await _orchestrator.ProcessAsync(parseResult.Payload, stoppingToken);
 
             if (!result.IsSuccess)
             {
+                MessagesFailed.Inc();
                 _logger.LogError(
                     "Message processing failed. Offset: {Offset}, Error: {Error}",
                     consumeResult.Offset.Value,
@@ -121,7 +146,10 @@ public sealed class KafkaConsumerService : BackgroundService
                     "Offset: {Offset}, Reason: {Reason}",
                     consumeResult.Offset.Value,
                     result.ErrorMessage);
+                MessagesFallback.Inc();
             }
+            else
+                MessagesEnriched.Inc();
 
             consumer.Commit(consumeResult);
 
