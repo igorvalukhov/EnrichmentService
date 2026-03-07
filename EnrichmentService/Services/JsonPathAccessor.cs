@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Services;
 
+/// <inheritdoc />
 public sealed class JsonPathAccessor : IJsonPathAccessor
 {
     /// <inheritdoc />

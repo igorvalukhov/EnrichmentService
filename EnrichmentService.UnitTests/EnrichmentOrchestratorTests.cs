@@ -9,6 +9,9 @@ using System.Text.Json.Nodes;
 
 namespace EnrichmentService.UnitTests;
 
+/// <summary>
+/// Unit тесты для EnrichmentOrchestrator.
+/// </summary>
 public sealed class EnrichmentOrchestratorTests
 {
     private readonly Mock<IExternalApiClient> _apiClientMock = new(MockBehavior.Strict);
@@ -28,8 +31,16 @@ public sealed class EnrichmentOrchestratorTests
                 }
             ]
         }),
+        Options.Create(new ObservabilityOptions
+        {
+            LogRawMessages = false,
+            LogEnrichedMessages = false
+        }),
         NullLogger<EnrichmentOrchestrator>.Instance);
 
+    /// <summary>
+    /// Успешный сценарий, сообщение обогащено и возвращено с новыми полями.
+    /// </summary>
     [Fact]
     public async Task ProcessAsync_HappyPath_ReturnsEnrichedMessage()
     {
@@ -51,6 +62,9 @@ public sealed class EnrichmentOrchestratorTests
         result.Payload["Name"]!.GetValue<string>().Should().Be("test");
     }
 
+    /// <summary>
+    /// Проверяем что POST во внешний API вызывается ровно один раз.
+    /// </summary>
     [Fact]
     public async Task ProcessAsync_SendCalledExactlyOnce()
     {
@@ -70,6 +84,9 @@ public sealed class EnrichmentOrchestratorTests
             Times.Once);
     }
 
+    /// <summary>
+    /// GET обогащения упал, отправляем оригинальное сообщение.
+    /// </summary>
     [Fact]
     public async Task ProcessAsync_FetchFails_SendsOriginalMessage()
     {
@@ -93,6 +110,9 @@ public sealed class EnrichmentOrchestratorTests
         sentMessage!["Name"]!.GetValue<string>().Should().Be("test");
     }
 
+    /// <summary>
+    /// GET упал, POST всё равно вызывается однократно с оригиналом.
+    /// </summary>
     [Fact]
     public async Task ProcessAsync_FetchFails_SendStillCalledOnce()
     {
@@ -112,6 +132,9 @@ public sealed class EnrichmentOrchestratorTests
             Times.Once);
     }
 
+    /// <summary>
+    /// Поля оригинального сообщения не изменяются после обогащения.
+    /// </summary>
     [Fact]
     public async Task ProcessAsync_OriginalFieldsPreserved()
     {
@@ -130,6 +153,9 @@ public sealed class EnrichmentOrchestratorTests
         result.Payload["Email"]!.GetValue<string>().Should().Be("test@mail.ru");
     }
 
+    /// <summary>
+    /// POST во внешний API упал, возвращаем Failure.
+    /// </summary>
     [Fact]
     public async Task ProcessAsync_SendFails_ReturnsFailure()
     {

@@ -7,6 +7,9 @@ using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Kafka;
 
+/// <summary>
+/// Читает сообщения из Kafka топика и передаёт их в оркестратор.
+/// </summary>
 public sealed class KafkaConsumerService : BackgroundService
 {
     private readonly IEnrichmentOrchestrator _orchestrator;
@@ -23,6 +26,7 @@ public sealed class KafkaConsumerService : BackgroundService
         _logger = logger;
     }
 
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation(
@@ -149,7 +153,7 @@ public sealed class KafkaConsumerService : BackgroundService
                 return EnrichmentResult.Failure(node, "Root must be a JSON object.");
             }
 
-            return EnrichmentResult.Enriched(node);
+            return EnrichmentResult.Parsed(node);
         }
         catch (Exception ex)
         {
