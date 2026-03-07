@@ -91,6 +91,32 @@ public sealed class EnrichmentOrchestratorIntegrationTests : IDisposable
         result.Payload["meta"]!.GetValue<string>().Should().Be("preserved");
     }
 
+    [Fact]
+    public async Task WhenFetchFails_SendsOriginalMessage()
+    {
+        _wireMock.Reset();
+        _wireMock
+            .Given(Request.Create().WithPath("/api/enrich/567").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(500));
+
+        JsonNode? capturedBody = null;
+        _wireMock
+            .Given(Request.Create().WithPath("/api/messages/enriched").UsingPost())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithCallback(req =>
+                {
+                    capturedBody = JsonNode.Parse(req.Body ?? "{}");
+                    return new WireMock.ResponseMessage { StatusCode = 200 };
+                }));
+
+        var message = JsonNode.Parse("""{"user":{"id":"567"},"important":"data"}""")!;
+
+        var result = await _sut.ProcessAsync(message);
+        result.IsSuccess.Should().BeTrue();
+        result.WasEnriched.Should().BeFalse();
+        result.ErrorMessage.Should().NotBeNullOrEmpty();
+    }
+
     public void Dispose()
     {
         _wireMock.Stop();
