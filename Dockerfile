@@ -10,11 +10,10 @@ RUN dotnet publish ./EnrichmentService/EnrichmentService.csproj \
     --no-restore \
     --output /app/publish
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
 RUN adduser --disabled-password --gecos "" appuser
-
 RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
 
 COPY --from=build /app/publish .
