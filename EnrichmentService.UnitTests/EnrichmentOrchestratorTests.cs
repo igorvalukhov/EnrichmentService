@@ -49,7 +49,7 @@ public sealed class EnrichmentOrchestratorTests
     [Fact]
     public async Task ProcessAsync_HappyPath_ReturnsEnrichedMessage()
     {
-        var message = JsonNode.Parse("""{"id":"123","Name":"test"}""")!;
+        var message = JsonNode.Parse("""{"user":{"id":"123"},"Name":"test"}""")!;
         var enrichData = JsonNode.Parse("""{"age":25,"city":"Moscow"}""")!;
 
         _apiClientMock
@@ -63,7 +63,7 @@ public sealed class EnrichmentOrchestratorTests
 
         result.IsSuccess.Should().BeTrue();
         result.WasEnriched.Should().BeTrue();
-        result.Payload["userDetails"]!["age"]!.GetValue<int>().Should().Be(25);
+        result.Payload["user"]!["profile"]!["age"]!.GetValue<int>().Should().Be(25);
         result.Payload["Name"]!.GetValue<string>().Should().Be("test");
     }
 

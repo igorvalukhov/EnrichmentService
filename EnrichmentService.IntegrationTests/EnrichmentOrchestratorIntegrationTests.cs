@@ -162,6 +162,32 @@ public sealed class EnrichmentOrchestratorIntegrationTests : IDisposable
         postCount.Should().Be(1);
     }
 
+    /// <summary>
+    /// GET обогащения вернул ошибку, POST всё равно вызывается однократно с оригиналом.
+    /// </summary>
+    [Fact]
+    public async Task WhenFetchFails_PostStillCalledOnce()
+    {
+        _wireMock.Reset();
+        _wireMock
+            .Given(Request.Create().WithPath("/api/enrich/789").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(503));
+
+        _wireMock
+            .Given(Request.Create().WithPath("/api/messages/enriched").UsingPost())
+            .RespondWith(Response.Create().WithStatusCode(200));
+
+        var message = JsonNode.Parse("""{"user":{"id":"789"}}""")!;
+
+        await _sut.ProcessAsync(message);
+
+        var postCount = _wireMock.LogEntries
+            .Count(e => e.RequestMessage.Path == "/api/messages/enriched"
+                        && e.RequestMessage.Method == "POST");
+
+        postCount.Should().Be(1);
+    }
+
     public void Dispose()
     {
         _wireMock.Stop();
