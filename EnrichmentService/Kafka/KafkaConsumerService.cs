@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using EnrichmentService.Abstractions;
 using EnrichmentService.Configuration;
 using EnrichmentService.Models;
 using Microsoft.Extensions.Options;
@@ -8,13 +9,16 @@ namespace EnrichmentService.Kafka;
 
 public sealed class KafkaConsumerService : BackgroundService
 {
+    private readonly IEnrichmentOrchestrator _orchestrator;
     private readonly KafkaOptions _kafkaOptions;
     private readonly ILogger<KafkaConsumerService> _logger;
 
     public KafkaConsumerService(
+        IEnrichmentOrchestrator orchestrator,
         IOptions<KafkaOptions> kafkaOptions,
         ILogger<KafkaConsumerService> logger)
     {
+        _orchestrator = orchestrator;
         _kafkaOptions = kafkaOptions.Value;
         _logger = logger;
     }
@@ -80,11 +84,12 @@ public sealed class KafkaConsumerService : BackgroundService
 
             _logger.LogInformation(
                 "Raw message received. Topic: {Topic}, Partition: {Partition}, " +
-                "Offset: {Offset}, Key: {Key}",
+                "Offset: {Offset}, Key: {Key}, Body: {Body}",
                 consumeResult.Topic,
                 consumeResult.Partition.Value,
                 consumeResult.Offset.Value,
-                consumeResult.Message.Key);
+                consumeResult.Message.Key,
+                consumeResult.Message.Value);
 
             var parseResult = TryParseJson(consumeResult.Message.Value, consumeResult.Offset.Value);
 
@@ -94,10 +99,25 @@ public sealed class KafkaConsumerService : BackgroundService
                 continue;
             }
 
-            _logger.LogInformation(
-                "Message parsed successfully. Offset: {Offset}, Body: {Body}",
-                consumeResult.Offset.Value,
-                parseResult.Payload.ToJsonString());
+            var result = await _orchestrator.ProcessAsync(parseResult.Payload, stoppingToken);
+
+            if (!result.IsSuccess)
+            {
+                _logger.LogError(
+                    "Message processing failed. Offset: {Offset}, Error: {Error}",
+                    consumeResult.Offset.Value,
+                    result.ErrorMessage);
+                continue;
+            }
+
+            if (!result.WasEnriched)
+            {
+                _logger.LogWarning(
+                    "Message sent without enrichment (fallback). " +
+                    "Offset: {Offset}, Reason: {Reason}",
+                    consumeResult.Offset.Value,
+                    result.ErrorMessage);
+            }
 
             consumer.Commit(consumeResult);
 
@@ -118,17 +138,14 @@ public sealed class KafkaConsumerService : BackgroundService
 
             if (node is null)
             {
-                _logger.LogWarning(
-                    "Parsed JSON is null. Offset: {Offset}. Skipping.",
-                    offset);
+                _logger.LogWarning("Parsed JSON is null. Offset: {Offset}. Skipping.", offset);
                 return EnrichmentResult.Failure(JsonValue.Create("")!, "Parsed JSON is null.");
             }
 
             if (node is not JsonObject)
             {
                 _logger.LogWarning(
-                    "Message is not a JSON object. Offset: {Offset}. Skipping.",
-                    offset);
+                    "Message is not a JSON object. Offset: {Offset}. Skipping.", offset);
                 return EnrichmentResult.Failure(node, "Root must be a JSON object.");
             }
 
@@ -137,8 +154,7 @@ public sealed class KafkaConsumerService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Failed to parse message as JSON. Offset: {Offset}. Skipping.",
-                offset);
+                "Failed to parse message as JSON. Offset: {Offset}. Skipping.", offset);
             return EnrichmentResult.Failure(JsonValue.Create(rawValue)!, ex.Message);
         }
     }
