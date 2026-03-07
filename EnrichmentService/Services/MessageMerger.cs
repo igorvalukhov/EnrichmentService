@@ -3,12 +3,14 @@ using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Services;
 
+/// <inheritdoc />
 public sealed class MessageMerger : IMessageMerger
 {
     private readonly IJsonPathAccessor _accessor;
 
     public MessageMerger(IJsonPathAccessor accessor) => _accessor = accessor;
 
+    /// <inheritdoc />
     public JsonNode Merge(JsonNode original, IReadOnlyDictionary<string, JsonNode> enrichmentData)
     {
         ArgumentNullException.ThrowIfNull(original);

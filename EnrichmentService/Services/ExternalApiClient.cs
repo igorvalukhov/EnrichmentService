@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 
 namespace EnrichmentService.Services;
 
+/// <inheritdoc />
 public sealed class ExternalApiClient : IExternalApiClient
 {
     private readonly HttpClient _http;

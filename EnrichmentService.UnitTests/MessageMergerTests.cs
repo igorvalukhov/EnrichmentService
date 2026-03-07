@@ -4,10 +4,16 @@ using System.Text.Json.Nodes;
 
 namespace EnrichmentService.UnitTests;
 
+/// <summary>
+/// Unit тесты для MessageMerger.
+/// </summary>
 public sealed class MessageMergerTests
 {
     private readonly MessageMerger _sut = new(new JsonPathAccessor());
 
+    /// <summary>
+    /// Без данных обогащения возвращается идентичная копия оригинала.
+    /// </summary>
     [Fact]
     public void Merge_NoEnrichmentData_ReturnsIdenticalCopy()
     {
@@ -19,6 +25,9 @@ public sealed class MessageMergerTests
         result["Name"]!.GetValue<string>().Should().Be("test");
     }
 
+    /// <summary>
+    /// Данные обогащения записываются по указанному DestinationPath.
+    /// </summary>
     [Fact]
     public void Merge_AddsEnrichmentAtDestinationPath()
     {
@@ -34,6 +43,9 @@ public sealed class MessageMergerTests
         result["userDetails"]!["city"]!.GetValue<string>().Should().Be("Moscow");
     }
 
+    /// <summary>
+    /// Оригинальный объект не изменяется после слияния.
+    /// </summary>
     [Fact]
     public void Merge_DoesNotMutateOriginal()
     {
@@ -48,6 +60,9 @@ public sealed class MessageMergerTests
         original.AsObject().ContainsKey("userDetails").Should().BeFalse();
     }
 
+    /// <summary>
+    /// Все поля оригинала сохраняются в результате слияния.
+    /// </summary>
     [Fact]
     public void Merge_PreservesAllOriginalFields()
     {
@@ -69,6 +84,9 @@ public sealed class MessageMergerTests
         result["Email"]!.GetValue<string>().Should().Be("test@mail.ru");
     }
 
+    /// <summary>
+    /// Несколько правил обогащения, все применяются.
+    /// </summary>
     [Fact]
     public void Merge_MultipleRules_AllApplied()
     {
@@ -85,6 +103,9 @@ public sealed class MessageMergerTests
         result["cityDetails"]!["name"]!.GetValue<string>().Should().Be("Moscow");
     }
 
+    /// <summary>
+    /// Null оригинал, выбрасывается ArgumentNullException.
+    /// </summary>
     [Fact]
     public void Merge_NullOriginal_Throws()
     {
@@ -92,6 +113,9 @@ public sealed class MessageMergerTests
         act.Should().Throw<ArgumentNullException>();
     }
 
+    /// <summary>
+    /// Корневой элемент не является объектом, выбрасывается InvalidOperationException.
+    /// </summary>
     [Fact]
     public void Merge_ArrayRoot_Throws()
     {

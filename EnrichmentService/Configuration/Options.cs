@@ -33,3 +33,12 @@ public sealed class ExternalApiOptions
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(10);
     public int RetryCount { get; init; } = 3;
 }
+
+public sealed class ObservabilityOptions
+{
+    public const string SectionName = "Observability";
+
+    public bool LogRawMessages { get; init; } = true;
+    public bool LogEnrichedMessages { get; init; } = true;
+    public int MaxLoggedMessageLength { get; init; } = 4096;
+}

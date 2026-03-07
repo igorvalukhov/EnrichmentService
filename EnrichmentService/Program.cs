@@ -3,6 +3,8 @@ using EnrichmentService.Configuration;
 using EnrichmentService.Kafka;
 using EnrichmentService.Services;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Polly;
 using Polly.Extensions.Http;
 using Serilog;
@@ -64,6 +66,12 @@ builder.Services.AddSingleton<IJsonPathAccessor, JsonPathAccessor>();
 builder.Services.AddSingleton<IMessageMerger, MessageMerger>();
 builder.Services.AddScoped<IEnrichmentOrchestrator, EnrichmentOrchestrator>();
 builder.Services.AddHostedService<KafkaConsumerService>();
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("EnrichmentService"))
+        .AddHttpClientInstrumentation()
+        .AddConsoleExporter());
 
 var host = builder.Build();
 
