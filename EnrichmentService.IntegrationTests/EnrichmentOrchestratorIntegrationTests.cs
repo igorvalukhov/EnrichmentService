@@ -46,6 +46,11 @@ public sealed class EnrichmentOrchestratorIntegrationTests : IDisposable
                 {
                     SourcePath = "user.id",
                     DestinationPath = "user.profile"
+                },
+                new EnrichmentRuleOptions
+                {
+                    SourcePath = "cityId",
+                    DestinationPath = "cityDetails"
                 }
             ]
         });
@@ -91,6 +96,9 @@ public sealed class EnrichmentOrchestratorIntegrationTests : IDisposable
         result.Payload["meta"]!.GetValue<string>().Should().Be("preserved");
     }
 
+    /// <summary>
+    /// GET обогащения вернул ошибку и отправляется оригинальное сообщение без обогащения.
+    /// </summary>
     [Fact]
     public async Task WhenFetchFails_SendsOriginalMessage()
     {
@@ -115,6 +123,43 @@ public sealed class EnrichmentOrchestratorIntegrationTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.WasEnriched.Should().BeFalse();
         result.ErrorMessage.Should().NotBeNullOrEmpty();
+    }
+
+    /// <summary>
+    /// При нескольких правилах обогащения POST во внешний API всё равно вызывается ровно один раз.
+    /// </summary>
+    [Fact]
+    public async Task FullCycle_PostSentExactlyOnce_EvenWithMultipleRules()
+    {
+        _wireMock.Reset();
+
+        _wireMock
+            .Given(Request.Create().WithPath("/api/enrich/123").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithBodyAsJson(new { name = "test" }));
+
+        _wireMock
+            .Given(Request.Create().WithPath("/api/enrich/777").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithBodyAsJson(new { cityName = "Moscow" }));
+
+        _wireMock
+            .Given(Request.Create().WithPath("/api/messages/enriched").UsingPost())
+            .RespondWith(Response.Create().WithStatusCode(200));
+
+        var message = JsonNode.Parse("""{"user":{"id":"123"},"cityId":"777"}""")!;
+
+        await _sut.ProcessAsync(message);
+
+        var getCount = _wireMock.LogEntries
+            .Count(e => e.RequestMessage.Method == "GET");
+
+        var postCount = _wireMock.LogEntries
+            .Count(e => e.RequestMessage.Path == "/api/messages/enriched"
+                        && e.RequestMessage.Method == "POST");
+
+        getCount.Should().Be(2);
+        postCount.Should().Be(1);
     }
 
     public void Dispose()

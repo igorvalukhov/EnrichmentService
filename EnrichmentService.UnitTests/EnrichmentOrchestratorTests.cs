@@ -26,8 +26,13 @@ public sealed class EnrichmentOrchestratorTests
             [
                 new EnrichmentRuleOptions
                 {
-                    SourcePath = "id",
-                    DestinationPath = "userDetails"
+                    SourcePath = "user.id",
+                    DestinationPath = "user.profile"
+                },
+                new EnrichmentRuleOptions
+                {
+                    SourcePath = "cityId",
+                    DestinationPath = "cityDetails"
                 }
             ]
         }),
