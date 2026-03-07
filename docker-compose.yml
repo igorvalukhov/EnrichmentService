@@ -39,6 +39,7 @@ services:
       ExternalApi__RetryCount: 3
       Observability__LogRawMessages: true
       Observability__LogEnrichedMessages: true
+      Observability__MetricsPort: 9090
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped

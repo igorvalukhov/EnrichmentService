@@ -7,6 +7,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
 using Polly.Extensions.Http;
+using Prometheus;
 using Serilog;
 using Serilog.Events;
 
@@ -66,12 +67,18 @@ builder.Services.AddSingleton<IJsonPathAccessor, JsonPathAccessor>();
 builder.Services.AddSingleton<IMessageMerger, MessageMerger>();
 builder.Services.AddScoped<IEnrichmentOrchestrator, EnrichmentOrchestrator>();
 builder.Services.AddHostedService<KafkaConsumerService>();
-
 builder.Services.AddOpenTelemetry()
     .WithTracing(tracing => tracing
         .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("EnrichmentService"))
         .AddHttpClientInstrumentation()
         .AddConsoleExporter());
+
+var observabilityOptions = builder.Configuration
+    .GetSection(ObservabilityOptions.SectionName)
+    .Get<ObservabilityOptions>() ?? new ObservabilityOptions();
+
+builder.Services.AddMetricServer(options =>
+    options.Port = observabilityOptions.MetricsPort);
 
 var host = builder.Build();
 

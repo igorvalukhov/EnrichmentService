@@ -41,4 +41,5 @@ public sealed class ObservabilityOptions
     public bool LogRawMessages { get; init; } = true;
     public bool LogEnrichedMessages { get; init; } = true;
     public int MaxLoggedMessageLength { get; init; } = 4096;
+    public ushort MetricsPort { get; init; } = 9090;
 }
