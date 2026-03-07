@@ -188,6 +188,29 @@ public sealed class EnrichmentOrchestratorIntegrationTests : IDisposable
         postCount.Should().Be(1);
     }
 
+    /// <summary>
+    /// POST во внешний API упал, возвращается Failure, сообщение не отправлено.
+    /// </summary>
+    [Fact]
+    public async Task WhenSendFails_ReturnsFailureResult()
+    {
+        _wireMock.Reset();
+        _wireMock
+            .Given(Request.Create().WithPath("/api/enrich/123").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithBodyAsJson(new { name = "Carol" }));
+
+        _wireMock
+            .Given(Request.Create().WithPath("/api/messages/enriched").UsingPost())
+            .RespondWith(Response.Create().WithStatusCode(500));
+
+        var message = JsonNode.Parse("""{"user":{"id":"123"}}""")!;
+
+        var result = await _sut.ProcessAsync(message);
+
+        result.IsSuccess.Should().BeFalse();
+    }
+
     public void Dispose()
     {
         _wireMock.Stop();
